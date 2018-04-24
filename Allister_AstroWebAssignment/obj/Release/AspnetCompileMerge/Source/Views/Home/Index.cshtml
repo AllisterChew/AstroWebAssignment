@@ -1,0 +1,197 @@
+﻿@model Allister_AstroWebAssignment.Models.ViewModel.HomeViewModel
+@{
+    ViewBag.Title = "Home Page";
+}
+@section styles{
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="~/Styles/StyleSheets.css">
+    <style>
+        .metadata-label{
+            font-weight:bold;
+        }
+    </style>
+}
+@section scripts{
+    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+    <script>
+        var favouriteCookieName = "favourite";
+
+        $(document).ready(function () {
+            InitializeDatatable();
+        });
+
+        function AddToFavourite(channelId, event) {
+            $('#loading').show();
+            var eventType = event.innerText;
+            if (eventType === "Remove From Favourite")
+            {
+                var cookieVal = getCookie(favouriteCookieName);
+
+                if (cookieVal) {
+                    var channelIdWithComma = channelId + ",";
+                    cookieVal = cookieVal.replace(channelIdWithComma, "").replace(channelId, "");
+                    setCookie("favourite", cookieVal);
+                }
+
+                var currentTitle = $(event).parents("td").prev().text();
+                $(event).parents("td").prev().html(currentTitle);
+                event.innerText = "Add to Favourite";
+            } else {
+                var cookieVal = getCookie(favouriteCookieName);
+                if (cookieVal) {
+                    if (cookieVal.indexOf(channelId) === -1) {
+                        cookieVal += "," + channelId;
+                        setCookie("favourite", cookieVal);
+                    }
+                } else {
+                    setCookie("favourite", channelId);
+                }
+                var currentTitle = $(event).parents("td").prev().text();
+                $(event).parents("td").prev().html("<span class='glyphicon glyphicon-star' aria-hidden='true'></span>" + currentTitle);
+                event.innerText = "Remove From Favourite";
+            }
+            InitializeDatatable();
+            $('#loading').hide();
+        }
+
+        function InitializeDatatable(){
+            $('#channelList').DataTable({
+                "aaSorting": [[1, "asc"]],
+                "bDestroy": true
+            });
+        }
+
+        function RetrieveMetadata(channelId) {
+            var getChannelsDetailApiProxy = "/api/Channels?channelId=" + channelId;
+
+            if (getChannelsDetailApiProxy) {
+                $('#loading').show();
+                $.ajax({
+                    method: "GET",
+                    url: getChannelsDetailApiProxy,
+                }).done(function (response) {
+                    if (response) {
+                        if(response.channelsData)
+                            DisplayMetadata(response.channelsData);
+                        if(response.channelsEventData)
+                            DisplayChannelEvent(response.channelsEventData);
+
+                        $('#loading').hide();
+                    }
+                });
+            }
+        }
+
+        function DisplayMetadata(response) {
+            var responseObject = JSON.parse(JSON.stringify(response));
+
+            if (responseObject && responseObject.channel) {
+                var channelCount = responseObject.channel.length;
+                if (channelCount > 0) {
+                    for (var i = 0; i < channelCount; i++) {
+                        if (responseObject.channel[i].channelTitle) {
+                            $('#metadataTitle').html(responseObject.channel[i].channelTitle);
+                        }
+                        if (responseObject.channel[i].channelDescription) {
+                            $('#metadataDescription').html("<span class='metadata-label'>Description: </span>" + "<br/>" + responseObject.channel[i].channelDescription);
+                        }
+                        if (responseObject.channel[i].channelLanguage) {
+                            $('#metadataLanguage').html("<span class='metadata-label'>Language: </span>" + responseObject.channel[i].channelLanguage);
+                        }
+                        if (responseObject.channel[i].channelCategory) {
+                            $('#metadataCategory').html("<span class='metadata-label'>Category: </span>" + responseObject.channel[i].channelCategory);
+                        }
+
+                        if (responseObject.channel[i].channelTitle && responseObject.channel[i].channelTitle != "Oh! K" && responseObject.channel[i].channelExtRef) {
+                            var extensionReferenceCount = responseObject.channel[i].channelExtRef.length;
+                            if (extensionReferenceCount > 0) {
+                                for (var j = 0; j < extensionReferenceCount; j++) {
+                                    if (responseObject.channel[i].channelExtRef[j].system && responseObject.channel[i].channelExtRef[j].system == "Logo") {
+                                        if (responseObject.channel[i].channelExtRef[j].value) {
+                                            $('#metadataTitle').html("<img src='" + responseObject.channel[i].channelExtRef[j].value + "' alt='" + responseObject.channel[i].channelTitle + "' width='120'>");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            $('#showChannelMetadata').modal('show');
+        }
+
+        function DisplayChannelEvent(response){
+            var responseObject = JSON.parse(JSON.stringify(response));
+            if (responseObject && responseObject.getevent) {
+                var eventCount = responseObject.getevent.length;
+                for (var i = 0; i < eventCount; i++) {
+                    if(responseObject.getevent[i].currentlyAired === false)
+                    {
+                        $('#eventTitle').html();
+                        continue;
+                    }
+                    if(responseObject.getevent[i].programmeTitle){
+                        $('#eventTitle').html("<span class='metadata-label'>Currently Airing: </span>" + responseObject.getevent[i].programmeTitle);
+                        break;
+                    }
+                }
+            }
+        }
+
+        function setCookie(name, value){
+            var date = new Date;
+            date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + value + ';expires=' + date.toGMTString() + ';path=/';
+        }
+
+        function getCookie(name){
+            var value = "; " + document.cookie;
+            var parts = value.split("; " + name + "=");
+            if (parts.length == 2) return parts.pop().split(";").shift();
+        }
+    </script>
+}
+@if (Model.channelsData.channels != null && Model.channelsData.channels != null && Model.channelsData.channels.Count > 0)
+{
+    <h3>Channels</h3>
+    <hr/>
+    <div id="loading" class="loading">Loading....</div>
+    <div class="table-responsive">
+        <table id="channelList" class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Channel Number</th>
+                    <th scope="col">Channel Name</th>
+                    <th scope="col">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var channelList in Model.channelsData.channels)
+                {
+                    <tr>
+                        <td>@channelList.channelStbNumber</td>
+                        <td>@(channelList.isFavourite ? Html.Raw("<span class='glyphicon glyphicon-star' aria-hidden='true'></span>") : Html.Raw("")) @channelList.channelTitle</td>
+                        <td><button type="button" class="btn btn-primary" onclick="AddToFavourite(@channelList.channelId, this);">@(channelList.isFavourite ? "Remove From Favourite" : "Add to Favourite")</button> <button type="button" class="btn btn-primary" onclick="RetrieveMetadata(@channelList.channelId);">More Information</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div id="showChannelMetadata" class="modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h5 id="metadataTitle" class="modal-title"></h5>
+                </div>
+                <div class="modal-body">
+                    <p id="metadataDescription"></p>
+                    <p id="metadataLanguage"></p>
+                    <p id="metadataCategory"></p>
+                    <p id="eventTitle"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
